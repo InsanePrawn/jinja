@@ -285,6 +285,12 @@ class Stmt(Node):
     abstract = True
 
 
+class EmptyStatement(Stmt):
+    """Node where a statement should be but an empty statement was given.
+    Returned in Fault-tolerant Mode only
+    """
+
+
 class Helper(Node):
     """Nodes that exist in a specific context only."""
 
@@ -485,6 +491,15 @@ class Expr(Node):
     def can_assign(self) -> bool:
         """Check if it's possible to assign something to this node."""
         return False
+
+
+class EmptyExpression(Expr):
+    """Node where an expression should be but an empty expression was given.
+    Returned in Fault-tolerant Mode only
+    """
+
+    comment: str
+    attributes: t.Tuple[str, ...] = ("comment",)
 
 
 class BinExpr(Expr):

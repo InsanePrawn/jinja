@@ -57,7 +57,9 @@ class Parser:
         name: str | None = None,
         filename: str | None = None,
         state: str | None = None,
+        fault_tolerant: bool = False,
     ) -> None:
+        self.fault_tolerant = fault_tolerant
         self.environment = environment
         self.stream = environment._tokenize(source, name, filename, state)
         self.name = name
@@ -685,6 +687,7 @@ class Parser:
         extra_end_rules: tuple[str, ...] | None = None,
         explicit_parentheses: bool = False,
         with_namespace: bool = False,
+        allow_empty: bool = False,
     ) -> nodes.Tuple | nodes.Expr:
         """Works like `parse_expression` but if multiple expressions are
         delimited by a comma a :class:`~jinja2.nodes.Tuple` node is created.
@@ -740,11 +743,12 @@ class Parser:
             # nothing) in the spot of an expression would be an empty
             # tuple.
             if not explicit_parentheses:
+                if allow_empty:
+                    return nodes.EmptyExpression(lineno=lineno, comment="")
                 self.fail(
                     "Expected an expression,"
                     f" got {describe_token(self.stream.current)!r}"
                 )
-
         return nodes.Tuple(args, "load", lineno=lineno)
 
     def parse_list(self) -> nodes.List:
@@ -1010,7 +1014,10 @@ class Parser:
                     next(self.stream)
                 elif token.type == "variable_begin":
                     next(self.stream)
-                    add_data(self.parse_tuple(with_condexpr=True))
+                    data = self.parse_tuple(with_condexpr=True, allow_empty=self.fault_tolerant)
+                    if isinstance(data, nodes.EmptyExpression):
+                        data.comment = "Empty expression inside print statement"
+                    add_data(data)
                     self.stream.expect("variable_end")
                 elif token.type == "block_begin":
                     flush_data()
