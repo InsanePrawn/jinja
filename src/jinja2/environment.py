@@ -252,6 +252,10 @@ class Environment:
             will reload the template.  For higher performance it's possible to
             disable that.
 
+        `parser_tolerate_faults`
+            Instruct the parser to tolerate some invalid constructs that don't cause much semantic uncertainty, useful for linters and LSP to provide output on incomplete templates.
+            Defaults to False.
+
         `bytecode_cache`
             If set to a bytecode cache object, this object will provide a
             cache for the internal Jinja bytecode so that templates don't
@@ -316,6 +320,7 @@ class Environment:
         auto_reload: bool = True,
         bytecode_cache: t.Optional["BytecodeCache"] = None,
         enable_async: bool = False,
+        parser_tolerate_faults: bool = False,
     ):
         # !!Important notice!!
         #   The constructor accepts quite a few arguments that should be
@@ -360,6 +365,7 @@ class Environment:
         self.auto_reload = auto_reload
 
         # configurable policies
+        self.parser_tolerate_faults = parser_tolerate_faults
         self.policies = DEFAULT_POLICIES.copy()
 
         # load extensions

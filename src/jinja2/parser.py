@@ -57,9 +57,7 @@ class Parser:
         name: str | None = None,
         filename: str | None = None,
         state: str | None = None,
-        fault_tolerant: bool = False,
     ) -> None:
-        self.fault_tolerant = fault_tolerant
         self.environment = environment
         self.stream = environment._tokenize(source, name, filename, state)
         self.name = name
@@ -401,9 +399,17 @@ class Parser:
             node.with_context = False
         return node
 
-    def parse_signature(self, node: _MacroCall) -> None:
+    def parse_signature(self, node: _MacroCall) -> None | nodes.EmptyExpression | nodes.InvalidExpression:
         args = node.args = []
         defaults = node.defaults = []
+        if self.environment.parser_tolerate_faults and self.stream.current.type != "lparen":
+            if self.stream.current.type == "block_end":
+                return nodes.EmptyExpression(  # type: ignore[assignment]
+                    lineno=node.lineno,
+                    lineno_end=self.stream.current.lineno,
+                    message="Empty signature",
+                )
+
         self.stream.expect("lparen")
         while self.stream.current.type != "rparen":
             if args:
@@ -413,14 +419,27 @@ class Parser:
             if self.stream.skip_if("assign"):
                 defaults.append(self.parse_expression())
             elif defaults:
-                self.fail("non-default argument follows default argument")
+                msg = "non-default argument follows default argument"
+                if not self.environment.parser_tolerate_faults:
+                    self.fail(msg)
+                err = nodes.InvalidExpression(
+                    lineno=arg.lineno,
+                    lineno_end=self.stream.current.lineno,
+                    message=msg,
+                    original_str=arg.name,
+                )
+                arg.issues = [err]
             args.append(arg)
         self.stream.expect("rparen")
+        return None
 
     def parse_call_block(self) -> nodes.CallBlock:
         node = nodes.CallBlock(lineno=next(self.stream).lineno)
         if self.stream.current.type == "lparen":
-            self.parse_signature(node)
+            signature_issue = self.parse_signature(node)
+            if signature_issue:
+                assert self.environment.parser_tolerate_faults
+                node.args = signature_issue  # type: ignore[assignment]
         else:
             node.args = []
             node.defaults = []
@@ -439,9 +458,15 @@ class Parser:
         return node
 
     def parse_macro(self) -> nodes.Macro:
-        node = nodes.Macro(lineno=next(self.stream).lineno)
+        node = nodes.Macro(lineno=next(self.stream).lineno, issues=None)
         node.name = self.parse_assign_target(name_only=True).name
-        self.parse_signature(node)
+        signature_issue = self.parse_signature(node)
+        if signature_issue:
+            assert self.environment.parser_tolerate_faults
+            node.args = signature_issue  # type: ignore[assignment]
+            if node.issues is None:
+                node.issues = []
+            node.issues.append(signature_issue)
         node.body = self.parse_statements(("name:endmacro",), drop_needle=True)
         return node
 
@@ -744,7 +769,9 @@ class Parser:
             # tuple.
             if not explicit_parentheses:
                 if allow_empty:
-                    return nodes.EmptyExpression(lineno=lineno, comment="")
+                    empty = nodes.EmptyExpression(lineno=lineno, message="Expected an expression")
+                    empty.issues = [empty]
+                    return empty
                 self.fail(
                     "Expected an expression,"
                     f" got {describe_token(self.stream.current)!r}"
@@ -1014,9 +1041,9 @@ class Parser:
                     next(self.stream)
                 elif token.type == "variable_begin":
                     next(self.stream)
-                    data = self.parse_tuple(with_condexpr=True, allow_empty=self.fault_tolerant)
+                    data = self.parse_tuple(with_condexpr=True, allow_empty=self.environment.parser_tolerate_faults)
                     if isinstance(data, nodes.EmptyExpression):
-                        data.comment = "Empty expression inside print statement"
+                        data.message = "Empty expression inside print statement"
                     add_data(data)
                     self.stream.expect("variable_end")
                 elif token.type == "block_begin":

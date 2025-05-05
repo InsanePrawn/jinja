@@ -125,6 +125,7 @@ class Node(metaclass=NodeType):
 
     lineno: int
     environment: t.Optional["Environment"]
+    issues: list[t.Union["ParserIssue", "ExprIssue"]]
 
     def __init__(self, *fields: t.Any, **attributes: t.Any) -> None:
         if self.abstract:
@@ -277,6 +278,13 @@ class Node(metaclass=NodeType):
         buf: list[str] = []
         _dump(self)
         return "".join(buf)
+
+
+class ParserIssue(Node):
+    attributes: tuple[str, ...] = ("message", "lineno_end")
+
+    message: str
+    lineno_end: int | None
 
 
 class Stmt(Node):
@@ -493,13 +501,26 @@ class Expr(Node):
         return False
 
 
-class EmptyExpression(Expr):
+class ExprIssue(Expr):
+    attributes: tuple[str, ...] = ("message", "lineno_end")
+    message: str
+    lineno_end: int | None
+
+
+class EmptyExpression(ExprIssue):
     """Node where an expression should be but an empty expression was given.
     Returned in Fault-tolerant Mode only
     """
 
-    comment: str
-    attributes: t.Tuple[str, ...] = ("comment",)
+
+class InvalidExpression(ExprIssue):
+    """Node where an expression should be but an unparsable expression was given.
+    Returned in Fault-tolerant Mode only
+    """
+
+    attributes: tuple[str, ...] = ("original_str",)
+
+    original_str: str
 
 
 class BinExpr(Expr):
