@@ -120,7 +120,7 @@ class Node(metaclass=NodeType):
     """
 
     fields: tuple[str, ...] = ()
-    attributes: tuple[str, ...] = ("lineno", "environment")
+    attributes: tuple[str, ...] = ("lineno", "environment", "issues")
     abstract = True
 
     lineno: int
@@ -171,13 +171,19 @@ class Node(metaclass=NodeType):
         self,
         exclude: t.Container[str] | None = None,
         only: t.Container[str] | None = None,
+        reverse: bool = False,
     ) -> t.Iterator["Node"]:
         """Iterates over all direct child nodes of the node.  This iterates
         over all fields and yields the values of they are nodes.  If the value
         of a field is a list all the nodes in that list are returned.
         """
-        for _, item in self.iter_fields(exclude, only):
+        items: t.Iterable[t.Tuple[str, t.Any]] = self.iter_fields(exclude, only)
+        if reverse:
+            items = reversed(list(items))
+        for _, item in items:
             if isinstance(item, list):
+                if reverse:
+                    item = reversed(item)
                 for n in item:
                     if isinstance(n, Node):
                         yield n
