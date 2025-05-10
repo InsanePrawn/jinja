@@ -190,22 +190,28 @@ class Node(metaclass=NodeType):
             elif isinstance(item, Node):
                 yield item
 
-    def find(self, node_type: type[_NodeBound]) -> _NodeBound | None:
+    def find(
+        self, node_type: type[_NodeBound], *, reverse: bool = False
+    ) -> _NodeBound | None:
         """Find the first node of a given type.  If no such node exists the
         return value is `None`.
+        With reverse=True, the last node is returned instead
         """
-        for result in self.find_all(node_type):
+        for result in self.find_all(node_type, reverse=reverse):
             return result
 
         return None
 
     def find_all(
-        self, node_type: type[_NodeBound] | tuple[type[_NodeBound], ...]
+        self,
+        node_type: type[_NodeBound] | tuple[type[_NodeBound], ...],
+        *,
+        reverse: bool = False,
     ) -> t.Iterator[_NodeBound]:
         """Find all the nodes of a given type.  If the type is a tuple,
         the check is performed for any of the tuple items.
         """
-        for child in self.iter_child_nodes():
+        for child in self.iter_child_nodes(reverse=reverse):
             if isinstance(child, node_type):
                 yield child  # type: ignore
             yield from child.find_all(node_type)
