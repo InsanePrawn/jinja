@@ -120,12 +120,15 @@ class Node(metaclass=NodeType):
     """
 
     fields: tuple[str, ...] = ()
-    attributes: tuple[str, ...] = ("lineno", "environment", "issues")
+    attributes: tuple[str, ...] = ("lineno", "environment", "issues", "lineno_end")
     abstract = True
 
     lineno: int
     environment: t.Optional["Environment"]
+
+    # only filled in diagnostic mode
     issues: list[t.Union["ParserIssue", "ExprIssue"]]
+    lineno_end: int | None
 
     def __init__(self, *fields: t.Any, **attributes: t.Any) -> None:
         if self.abstract:
@@ -293,10 +296,9 @@ class Node(metaclass=NodeType):
 
 
 class ParserIssue(Node):
-    attributes: tuple[str, ...] = ("message", "lineno_end")
+    attributes: tuple[str, ...] = ("message",)
 
     message: str
-    lineno_end: int | None
 
 
 class Stmt(Node):
@@ -514,9 +516,8 @@ class Expr(Node):
 
 
 class ExprIssue(Expr):
-    attributes: tuple[str, ...] = ("message", "lineno_end")
+    attributes: tuple[str, ...] = ("message",)
     message: str
-    lineno_end: int | None
 
 
 class EmptyExpression(ExprIssue):
