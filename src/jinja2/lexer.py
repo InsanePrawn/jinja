@@ -666,13 +666,7 @@ class Lexer:
 
             yield Token(lineno, token, value)
 
-    def tokeniter(
-        self,
-        source: str,
-        name: str | None,
-        filename: str | None = None,
-        state: str | None = None,
-    ) -> t.Iterator[tuple[int, str, str]]:
+    def tokeniter(self, *kargs, **kwargs) -> t.Iterator[tuple[int, str, str]]:
         """This method tokenizes the text and returns the tokens in a
         generator. Use this method if you just want to tokenize a template.
 
@@ -680,6 +674,18 @@ class Lexer:
             Only ``\\n``, ``\\r\\n`` and ``\\r`` are treated as line
             breaks.
         """
+        yield from (
+            (tup[0], tup[2], tup[3])
+            for tup in self.tokeniter_linepos(*kargs, **kwargs)
+        )
+
+    def tokeniter_linepos(
+        self,
+        source: str,
+        name: str | None,
+        filename: str | None = None,
+        state: str | None = None,
+    ) -> t.Iterator[tuple[int, int, str, str]]:
         lines = newline_re.split(source)[::2]
 
         if not self.keep_trailing_newline and lines[-1] == "":
@@ -765,7 +771,8 @@ class Lexer:
                         elif token == "#bygroup":
                             for key, value in m.groupdict().items():
                                 if value is not None:
-                                    yield lineno, key, value
+                                    yield lineno, pos, key, value
+                                    pos = 0 if value.endswith("\n") else len(value.splitlines(keepends=False)[-1])
                                     lineno += value.count("\n")
                                     break
                             else:
@@ -778,7 +785,7 @@ class Lexer:
                             data = groups[idx]
 
                             if data or token not in ignore_if_empty:
-                                yield lineno, token, data  # type: ignore[misc]
+                                yield lineno, pos, token, data  # type: ignore[misc]
 
                             lineno += data.count("\n") + newlines_stripped
                             newlines_stripped = 0
@@ -813,7 +820,7 @@ class Lexer:
 
                     # yield items
                     if data or tokens not in ignore_if_empty:
-                        yield lineno, tokens, data
+                        yield lineno, pos, tokens, data
 
                     lineno += data.count("\n")
 
