@@ -120,10 +120,17 @@ class Node(metaclass=NodeType):
     """
 
     fields: tuple[str, ...] = ()
-    attributes: tuple[str, ...] = ("lineno", "environment", "issues", "lineno_end")
+    attributes: tuple[str, ...] = (
+        "lineno",
+        "linepos",
+        "environment",
+        "issues",
+        "lineno_end",
+    )
     abstract = True
 
     lineno: int
+    linepos: int
     environment: t.Optional["Environment"]
 
     # only filled in diagnostic mode

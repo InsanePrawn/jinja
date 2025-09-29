@@ -7,6 +7,7 @@ template code and python code in expressions.
 import re
 import typing as t
 from ast import literal_eval
+from dataclasses import dataclass
 from collections import deque
 from sys import intern
 
@@ -266,10 +267,12 @@ class Failure:
         raise self.error_class(self.message, lineno, filename)
 
 
-class Token(t.NamedTuple):
+@dataclass
+class Token:
     lineno: int
     type: str
     value: str
+    linepos: int | None = None
 
     def __str__(self) -> str:
         return describe_token(self)
@@ -609,19 +612,23 @@ class Lexer:
         state: str | None = None,
     ) -> TokenStream:
         """Calls tokeniter + tokenize and wraps it in a token stream."""
-        stream = self.tokeniter(source, name, filename, state)
+        stream = self.tokeniter_linepos(source, name, filename, state)
         return TokenStream(self.wrap(stream, name, filename), name, filename)
 
     def wrap(
         self,
-        stream: t.Iterable[tuple[int, str, str]],
+        stream: t.Iterable[tuple[int, str, str] | tuple[int, str, str, int]],
         name: str | None = None,
         filename: str | None = None,
     ) -> t.Iterator[Token]:
         """This is called with the stream as returned by `tokenize` and wraps
         every token in a :class:`Token` and converts the value.
         """
-        for lineno, token, value_str in stream:
+        for tup in stream:
+            if len(tup) == 3:
+                tup = (*tup, -1)
+            assert len(tup) == 4
+            lineno, token, value_str, linepos = tup
             if token in ignored_tokens:
                 continue
 
@@ -664,7 +671,7 @@ class Lexer:
             elif token == TOKEN_OPERATOR:
                 token = operators[value_str]
 
-            yield Token(lineno, token, value)
+            yield Token(lineno, token, value, linepos)
 
     def tokeniter(self, *kargs, **kwargs) -> t.Iterator[tuple[int, str, str]]:
         """This method tokenizes the text and returns the tokens in a
@@ -674,10 +681,7 @@ class Lexer:
             Only ``\\n``, ``\\r\\n`` and ``\\r`` are treated as line
             breaks.
         """
-        yield from (
-            (tup[0], tup[2], tup[3])
-            for tup in self.tokeniter_linepos(*kargs, **kwargs)
-        )
+        yield from (tup[0:3] for tup in self.tokeniter_linepos(*kargs, **kwargs))
 
     def tokeniter_linepos(
         self,
@@ -685,7 +689,7 @@ class Lexer:
         name: str | None,
         filename: str | None = None,
         state: str | None = None,
-    ) -> t.Iterator[tuple[int, int, str, str]]:
+    ) -> t.Iterator[tuple[int, str, str, int]]:
         lines = newline_re.split(source)[::2]
 
         if not self.keep_trailing_newline and lines[-1] == "":
@@ -771,7 +775,7 @@ class Lexer:
                         elif token == "#bygroup":
                             for key, value in m.groupdict().items():
                                 if value is not None:
-                                    yield lineno, pos, key, value
+                                    yield lineno, key, value, pos
                                     pos = 0 if value.endswith("\n") else len(value.splitlines(keepends=False)[-1])
                                     lineno += value.count("\n")
                                     break
@@ -785,7 +789,7 @@ class Lexer:
                             data = groups[idx]
 
                             if data or token not in ignore_if_empty:
-                                yield lineno, pos, token, data  # type: ignore[misc]
+                                yield lineno, token, data, pos  # type: ignore[misc]
 
                             lineno += data.count("\n") + newlines_stripped
                             newlines_stripped = 0
@@ -820,7 +824,7 @@ class Lexer:
 
                     # yield items
                     if data or tokens not in ignore_if_empty:
-                        yield lineno, pos, tokens, data
+                        yield lineno, tokens, data, pos
 
                     lineno += data.count("\n")
 
