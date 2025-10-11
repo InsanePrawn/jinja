@@ -698,6 +698,7 @@ class Lexer:
         source = "\n".join(lines)
         pos = 0
         lineno = 1
+        linepos = 0
         stack = ["root"]
 
         if state is not None and state != "root":
@@ -710,11 +711,31 @@ class Lexer:
         newlines_stripped = 0
         line_starting = True
 
+        def linepos_from_str(line_or_more: str) -> int:
+            line = line_or_more.rsplit("\n", 1)[-1]
+            return len(line)
+
+
+
+        old_pos = pos
         while True:
+            if old_pos != pos:
+                for i in range(5):
+                    backwards_offset = (10 ** i)
+                    backwards_location = max(0, pos - backwards_offset)
+                    lookbehind = source[backwards_location:pos + 1]
+                    last_line = lookbehind.rsplit("\n", 1)[-1]
+                    linepos = len(last_line)
+                    if len(last_line) != len(lookbehind):
+                        # we found a line break
+                        break
+                    if backwards_location <= 0:
+                        break
+                old_pos = pos
+
             # tokenizer loop
             for regex, tokens, new_state in statetokens:
                 m = regex.match(source, pos)
-
                 # if no match we try again with the next rule
                 if m is None:
                     continue
@@ -775,8 +796,9 @@ class Lexer:
                         elif token == "#bygroup":
                             for key, value in m.groupdict().items():
                                 if value is not None:
-                                    yield lineno, key, value, pos
+                                    yield lineno, key, value, linepos
                                     pos = 0 if value.endswith("\n") else len(value.splitlines(keepends=False)[-1])
+                                    linepos = pos
                                     lineno += value.count("\n")
                                     break
                             else:
@@ -789,14 +811,14 @@ class Lexer:
                             data = groups[idx]
 
                             if data or token not in ignore_if_empty:
-                                yield lineno, token, data, pos  # type: ignore[misc]
+                                yield lineno, token, data, linepos  # type: ignore[misc]
 
                             lineno += data.count("\n") + newlines_stripped
                             newlines_stripped = 0
 
                 # strings as token just are yielded as it.
                 else:
-                    data = m.group()
+                    data: str = m.group()
 
                     # update brace/parentheses balance
                     if tokens == TOKEN_OPERATOR:
@@ -824,9 +846,10 @@ class Lexer:
 
                     # yield items
                     if data or tokens not in ignore_if_empty:
-                        yield lineno, tokens, data, pos
+                        yield lineno, tokens, data, linepos
 
                     lineno += data.count("\n")
+
 
                 line_starting = m.group()[-1:] == "\n"
                 # fetch new position into new variable so that we can check

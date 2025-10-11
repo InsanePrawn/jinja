@@ -232,8 +232,12 @@ class Parser:
         linepos = _next.linepos
         target = self.parse_assign_target(with_namespace=True)
         if self.stream.skip_if("assign"):
-            expr = self.parse_tuple()
-            return nodes.Assign(target, expr, lineno=lineno, linepos=linepos)
+            expr = self.parse_tuple(allow_empty=self.environment.parser_tolerate_faults)
+            result = nodes.Assign(target, expr, lineno=lineno, linepos=linepos)
+            if isinstance(expr, nodes.EmptyExpression):
+                result.issues = [expr]
+                expr.message = "Assignment to empty expression"
+            return result
         filter_node = self.parse_filter(None)
         body = self.parse_statements(("name:endset",), drop_needle=True)
         return nodes.AssignBlock(
@@ -1188,6 +1192,7 @@ class Parser:
                         allow_empty=self.environment.parser_tolerate_faults,
                     )
                     if isinstance(data, nodes.EmptyExpression):
+                        data.lineno, data.linepos = token.lineno, token.linepos
                         data.message = "Empty expression inside print statement"
                     add_data(data)
                     self.stream.expect("variable_end")
