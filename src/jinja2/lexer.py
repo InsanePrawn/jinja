@@ -715,26 +715,34 @@ class Lexer:
             line = line_or_more.rsplit("\n", 1)[-1]
             return len(line)
 
-
-
         old_pos = pos
-        while True:
-            if old_pos != pos:
-                for i in range(5):
-                    backwards_offset = (10 ** i)
-                    backwards_location = max(0, pos - backwards_offset)
-                    lookbehind = source[backwards_location:pos + 1]
-                    last_line = lookbehind.rsplit("\n", 1)[-1]
-                    linepos = len(last_line)
-                    if len(last_line) != len(lookbehind):
-                        # we found a line break
-                        break
-                    if backwards_location <= 0:
-                        break
-                old_pos = pos
 
+        while True:
             # tokenizer loop
             for regex, tokens, new_state in statetokens:
+                if old_pos != pos:
+                    lineno = source[:pos].count("\n") + 1
+                    inbetween = source[old_pos:pos]
+                    if "\n" in inbetween:
+                        linepos = len(inbetween.rsplit("\n", 1)[-1])
+                    else:
+                        for backwards_buffer_expo in range(5):
+                            backwards_offset = 10**backwards_buffer_expo
+                            backwards_location = max(0, pos - backwards_offset)
+                            lookbehind = source[backwards_location:pos]
+                            last_line = lookbehind.rsplit("\n", 1)[-1]
+                            if (
+                                len(last_line) != len(lookbehind)
+                                or len(lookbehind) >= pos
+                            ):
+                                # we found a line break
+                                linepos = len(last_line)
+                                break
+                            if backwards_location <= 0:
+                                break
+
+                old_pos = pos
+
                 m = regex.match(source, pos)
                 # if no match we try again with the next rule
                 if m is None:
@@ -768,6 +776,7 @@ class Lexer:
                             # Strip all whitespace between the text and the tag.
                             stripped = text.rstrip()
                             newlines_stripped = text[len(stripped) :].count("\n")
+                            linepos = len(text.rsplit("\n", 1)[-1])
                             groups = [stripped, *groups[1:]]
                         elif (
                             # Not marked for preserving whitespace.
@@ -797,8 +806,9 @@ class Lexer:
                             for key, value in m.groupdict().items():
                                 if value is not None:
                                     yield lineno, key, value, linepos
-                                    pos = 0 if value.endswith("\n") else len(value.splitlines(keepends=False)[-1])
-                                    linepos = pos
+                                    linepos = len(value.splitlines(keepends=False)[-1])
+                                    # linepos = pos
+                                    # pos = linepos
                                     lineno += value.count("\n")
                                     break
                             else:
@@ -814,6 +824,9 @@ class Lexer:
                                 yield lineno, token, data, linepos  # type: ignore[misc]
 
                             lineno += data.count("\n") + newlines_stripped
+                            if "\n" in data:
+                                linepos = 0
+                            linepos += len(data.rsplit("\n")[-1])
                             newlines_stripped = 0
 
                 # strings as token just are yielded as it.
@@ -849,9 +862,11 @@ class Lexer:
                         yield lineno, tokens, data, linepos
 
                     lineno += data.count("\n")
-
+                    if "\n" in data:
+                        linepos = len(data.rsplit("\n", 1)[-1])
 
                 line_starting = m.group()[-1:] == "\n"
+
                 # fetch new position into new variable so that we can check
                 # if there is a internal parsing error which would result
                 # in an infinite loop
