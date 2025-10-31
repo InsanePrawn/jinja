@@ -168,7 +168,11 @@ class Parser:
         """Parse a single statement."""
         token = self.stream.current
         if token.type != "name":
-            self.fail("tag name expected", token.lineno)
+            if not self.environment.parser_tolerate_faults:
+                self.fail("tag name expected", token.lineno)
+            return nodes.EmptyStatement(
+                message="tag name expected", lineno=token.lineno, linepos=token.linepos
+            )
         self._tag_stack.append(token.value)
         pop_tag = True
         try:
@@ -235,7 +239,8 @@ class Parser:
             expr = self.parse_tuple(allow_empty=self.environment.parser_tolerate_faults)
             result = nodes.Assign(target, expr, lineno=lineno, linepos=linepos)
             if isinstance(expr, nodes.EmptyExpression):
-                result.issues = [expr]
+                result.issues = result.issues or []
+                result.issues.append(expr)
                 expr.message = "Assignment to empty expression"
             return result
         filter_node = self.parse_filter(None)
@@ -344,7 +349,19 @@ class Parser:
                 ):
                     self.fail("Required blocks can only contain comments or whitespace")
 
-        self.stream.skip_if("name:" + node.name)
+        if not self.environment.parser_tolerate_faults:
+            self.stream.skip_if("name:" + node.name)
+        elif self.stream.current.test("name"):
+            wrong = self.stream.expect("name")
+            if wrong.value != node.name:
+                node.issues = node.issues or []
+                node.issues.append(
+                    nodes.ParserIssue(
+                        message=f"endblock used with incorrect name {wrong.value!r} for block {node.name!r}",
+                        lineno=wrong.lineno,
+                        linepos=wrong.linepos,
+                    )
+                )
         return node
 
     def parse_extends(self) -> nodes.Extends:
@@ -465,7 +482,8 @@ class Parser:
                     message=msg,
                     original_str=arg.name,
                 )
-                arg.issues = [err]
+                arg.issues = arg.issues or []
+                arg.issues.append(err)
             args.append(arg)
         self.stream.expect("rparen")
         return None
@@ -504,9 +522,6 @@ class Parser:
         if signature_issue:
             assert self.environment.parser_tolerate_faults
             node.args = signature_issue  # type: ignore[assignment]
-            if node.issues is None:
-                node.issues = []
-            node.issues.append(signature_issue)
         node.body = self.parse_statements(("name:endmacro",), drop_needle=True)
         return node
 
@@ -870,7 +885,6 @@ class Parser:
                         linepos=linepos_start,
                         message="Expected an expression",
                     )
-                    empty.issues = [empty]
                     return empty
                 self.fail(
                     "Expected an expression,"
@@ -939,8 +953,8 @@ class Parser:
 
         if token.type == "dot":
             attr_token = self.stream.current
-            next(self.stream)
             if attr_token.type == "name":
+                next(self.stream)
                 return nodes.Getattr(
                     node,
                     attr_token.value,
@@ -948,11 +962,21 @@ class Parser:
                     lineno=token.lineno,
                     linepos=token.linepos,
                 )
-            elif attr_token.type != "integer":
-                self.fail("expected name or number", attr_token.lineno)
-            arg = nodes.Const(
-                attr_token.value, lineno=attr_token.lineno, linepos=attr_token.linepos
-            )
+            if attr_token.type != "integer":
+                if not self.environment.parser_tolerate_faults:
+                    self.fail("expected name or number", attr_token.lineno)
+                arg = nodes.EmptyExpression(
+                    message=f"Missing name for dot access! Got {attr_token.type}",
+                    lineno=token.lineno,
+                    linepos=token.linepos,
+                )
+            else:
+                next(self.stream)
+                arg = nodes.Const(
+                    attr_token.value,
+                    lineno=attr_token.lineno,
+                    linepos=attr_token.linepos,
+                )
             return nodes.Getitem(
                 node, arg, "load", lineno=token.lineno, linepos=token.linepos
             )
@@ -1088,8 +1112,26 @@ class Parser:
         while self.stream.current.type == "pipe" or start_inline:
             if not start_inline:
                 next(self.stream)
-            token = self.stream.expect("name")
-            name = token.value
+            issues: list[nodes.ExprIssue] = []
+
+            def _get_name() -> str:
+                nonlocal issues
+                if (
+                    self.environment.parser_tolerate_faults
+                    and not self.stream.current.test("name")
+                ):
+                    issues.append(
+                        nodes.EmptyExpression(
+                            message="Missing name: Filter expected",
+                            lineno=self.stream.current.lineno,
+                            linepos=self.stream.current.linepos,
+                        )
+                    )
+                    return ""
+                return self.stream.expect("name").value
+
+            name = _get_name()
+            token = self.stream.current
             while self.stream.current.type == "dot":
                 next(self.stream)
                 name += "." + self.stream.expect("name").value
@@ -1108,6 +1150,7 @@ class Parser:
                 dyn_kwargs,
                 lineno=token.lineno,
                 linepos=token.linepos,
+                issues=issues,
             )
             start_inline = False
         return node
@@ -1119,10 +1162,29 @@ class Parser:
             negated = True
         else:
             negated = False
-        name = self.stream.expect("name").value
+        issues: list[nodes.ExprIssue] = []
+
+        def _get_name() -> str:
+            nonlocal issues
+            if self.environment.parser_tolerate_faults and not self.stream.current.test(
+                "name"
+            ):
+                issues.append(
+                    nodes.EmptyExpression(
+                        message="Missing name: Test expected",
+                        lineno=self.stream.current.lineno,
+                        linepos=self.stream.current.linepos,
+                    )
+                )
+                return ""
+
+            return self.stream.expect("name").value
+
+        name = _get_name()
+
         while self.stream.current.type == "dot":
             next(self.stream)
-            name += "." + self.stream.expect("name").value
+            name += "." + _get_name()
         dyn_args = dyn_kwargs = None
         kwargs: list[nodes.Keyword] = []
         if self.stream.current.type == "lparen":
@@ -1152,6 +1214,7 @@ class Parser:
             dyn_kwargs,
             lineno=token.lineno,
             linepos=token.linepos,
+            issues=issues,
         )
         if negated:
             node = nodes.Not(node, lineno=token.lineno, linepos=token.linepos)
@@ -1207,6 +1270,12 @@ class Parser:
                     if isinstance(rv, list):
                         body.extend(rv)
                     else:
+                        if self.environment.parser_tolerate_faults and isinstance(
+                            rv, (nodes.ParserIssue, nodes.EmptyStatement)
+                        ):
+                            rv = nodes.Output(
+                                [rv], lineno=token.lineno, linepos=token.linepos
+                            )
                         body.append(rv)
                     self.stream.expect("block_end")
                 else:

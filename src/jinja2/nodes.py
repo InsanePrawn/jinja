@@ -304,7 +304,6 @@ class Node(metaclass=NodeType):
 
 class ParserIssue(Node):
     attributes: tuple[str, ...] = ("message",)
-
     message: str
 
 
@@ -318,6 +317,9 @@ class EmptyStatement(Stmt):
     """Node where a statement should be but an empty statement was given.
     Returned in Fault-tolerant Mode only
     """
+
+    attributes: tuple[str] = ("message",)
+    message: str | None
 
 
 class Helper(Node):
