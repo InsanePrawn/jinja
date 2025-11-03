@@ -126,6 +126,7 @@ class Node(metaclass=NodeType):
         "environment",
         "issues",
         "lineno_end",
+        "linepos_end",
     )
     abstract = True
 
@@ -136,6 +137,7 @@ class Node(metaclass=NodeType):
     # only filled in diagnostic mode
     issues: list[t.Union["ParserIssue", "ExprIssue"]]
     lineno_end: int | None
+    linepos_end: int | None
 
     def __init__(self, *fields: t.Any, **attributes: t.Any) -> None:
         if self.abstract:
