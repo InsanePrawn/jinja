@@ -435,10 +435,12 @@ class Block(Stmt):
     """
 
     fields = ("name", "body", "scoped", "required")
+    attributes = ("endblock_with_name",)
     name: str
     body: list[Node]
     scoped: bool
     required: bool
+    endblock_with_name: bool | None
 
 
 class Include(Stmt):

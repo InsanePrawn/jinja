@@ -352,6 +352,7 @@ class Parser:
         if not self.environment.parser_tolerate_faults:
             self.stream.skip_if("name:" + node.name)
         elif self.stream.current.test("name"):
+            node.endblock_with_name = True
             wrong = self.stream.expect("name")
             if wrong.value != node.name:
                 node.issues = node.issues or []
