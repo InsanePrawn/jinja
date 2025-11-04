@@ -272,7 +272,7 @@ class Token:
     lineno: int
     type: str
     value: str
-    linepos: int | None = None
+    linepos: int
 
     def __str__(self) -> str:
         return describe_token(self)
@@ -336,7 +336,7 @@ class TokenStream:
         self.name = name
         self.filename = filename
         self.closed = False
-        self.current = Token(1, TOKEN_INITIAL, "")
+        self.current = Token(1, TOKEN_INITIAL, "", 0)
         next(self)
 
     def __iter__(self) -> TokenStreamIterator:
@@ -399,7 +399,11 @@ class TokenStream:
 
     def close(self) -> None:
         """Close the stream."""
-        self.current = Token(self.current.lineno, TOKEN_EOF, "")
+        lineno, linepos = self.current.lineno, self.current.linepos
+        value = self.current.value
+        lineno += value.count("\n")
+        linepos += len(value.rsplit("\n", 1)[-1])
+        self.current = Token(lineno, TOKEN_EOF, "", linepos=linepos)
         self._iter = iter(())
         self.closed = True
 
