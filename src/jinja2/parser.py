@@ -318,7 +318,10 @@ class Parser:
             linepos_end=_next.linepos,
         )
         while True:
-            node.test = self.parse_tuple(with_condexpr=False)
+            node.test = self.parse_tuple(
+                with_condexpr=False,
+                allow_empty=self.environment.parser_tolerate_faults,
+            )
             node.body = self.parse_statements(("name:elif", "name:else", "name:endif"))
             node.elif_ = []
             node.else_ = []
