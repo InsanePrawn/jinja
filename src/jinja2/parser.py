@@ -177,11 +177,12 @@ class Parser:
                 self.fail("tag name expected", token.lineno)
             nxt = self.stream.look() if not self.stream.closed else self.stream.current
             return nodes.EmptyStatement(
-                message="tag name expected",
+                message="Tag name expected",
                 lineno=token.lineno,
                 linepos=token.linepos,
                 lineno_end=nxt.lineno,
                 linepos_end=nxt.linepos,
+                issue_context="tag",
             )
         self._tag_stack.append(token.value)
         pop_tag = True
@@ -259,6 +260,7 @@ class Parser:
             )
             if isinstance(expr, nodes.EmptyExpression):
                 expr.message = "Assignment to empty expression"
+                expr.issue_context = "assignment"
                 expr.lineno, expr.linepos = expr_start.lineno, expr_start.linepos
                 expr.linepos_end += 1
             return result
@@ -287,10 +289,15 @@ class Parser:
             extra_end_rules=("name:recursive",),
             allow_empty=self.environment.parser_tolerate_faults,
         )
-        if isinstance(iter, nodes.EmptyExpression):
+        if self.environment.parser_tolerate_faults and isinstance(
+            iter, nodes.EmptyExpression
+        ):
             iter.message = "Empty For-loop iterator"
             iter.lineno, iter.linepos = iter_start.lineno, iter_start.linepos
+            assert iter.linepos_end is not None
             iter.linepos_end += 1
+            iter.issue_context = "for_iterator"
+
         test = None
         if self.stream.skip_if("name:if"):
             test = self.parse_expression()
@@ -434,6 +441,7 @@ class Parser:
                         linepos=wrong.linepos,
                         lineno_end=wrong.lineno,
                         linepos_end=wrong.linepos + len(wrong.value),
+                        issue_context="endblock",
                     )
                 )
         end_token = self.stream.current
@@ -554,6 +562,7 @@ class Parser:
                     lineno_end=self.stream.current.lineno,
                     linepos_end=self.stream.current.linepos,
                     message=f"Missing {type(node).__name__} signature",
+                    issue_context="signature",
                 )
                 node.issues.append(issue)
                 return issue
@@ -609,6 +618,7 @@ class Parser:
                 linepos=call_node.linepos,
                 lineno_end=call_node.lineno_end,
                 linepos_end=call_node.linepos_end,
+                issue_context="function_call",
             )
             call_node.issues.append(issue)
         node.call = call_node
@@ -1089,11 +1099,12 @@ class Parser:
                     else self.stream.current
                 )
                 node = nodes.EmptyExpression(
-                    message="Unexpected end of print statement",
+                    message="Unexpected end of primary statement",
                     lineno=token.lineno,
                     linepos=token.linepos,
                     lineno_end=nxt.lineno,
                     linepos_end=nxt.linepos,
+                    issue_context="primary",
                 )
             else:
                 self.fail(msg, token.lineno)
@@ -1280,6 +1291,7 @@ class Parser:
                     linepos=token.linepos,
                     lineno_end=attr_token.lineno,
                     linepos_end=attr_token.linepos,
+                    issue_context="attribute",
                 )
             else:
                 next(self.stream)
@@ -1468,6 +1480,7 @@ class Parser:
                             linepos=self.stream.current.linepos,
                             lineno_end=self.stream.current.lineno,
                             linepos_end=self.stream.current.linepos,
+                            issue_context="filter",
                         )
                     )
                     return ""
@@ -1522,6 +1535,7 @@ class Parser:
                         linepos=self.stream.current.linepos,
                         lineno_end=self.stream.current.lineno,
                         linepos_end=self.stream.current.linepos,
+                        issue_context="test",
                     )
                 )
                 return ""
@@ -1637,6 +1651,7 @@ class Parser:
                         if nxt.type == "variable_end":
                             data.linepos_end += len(nxt.value)
                         data.message = "Empty expression inside print statement"
+                        data.issue_context = "print"
                     add_data(data)
                     self.stream.expect("variable_end")
                 elif token.type == "block_begin":

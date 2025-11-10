@@ -305,8 +305,9 @@ class Node(metaclass=NodeType):
 
 
 class ParserIssue(Node):
-    attributes: tuple[str, ...] = ("message",)
+    attributes: tuple[str, ...] = ("message", "issue_context")
     message: str
+    issue_context: str | None
 
 
 class Stmt(Node):
@@ -320,8 +321,9 @@ class EmptyStatement(Stmt):
     Returned in Fault-tolerant Mode only
     """
 
-    attributes: tuple[str] = ("message",)
+    attributes: tuple[str, ...] = ("message", "issue_context")
     message: str | None
+    issue_context: str | None
 
 
 class Helper(Node):
@@ -529,8 +531,9 @@ class Expr(Node):
 
 
 class ExprIssue(Expr):
-    attributes: tuple[str, ...] = ("message",)
+    attributes: tuple[str, ...] = ("message", "issue_context")
     message: str
+    issue_context: str | None
 
 
 class EmptyExpression(ExprIssue):
