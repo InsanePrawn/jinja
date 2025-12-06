@@ -1273,14 +1273,15 @@ class Parser:
             attr_token = self.stream.current
             if attr_token.type == "name":
                 next(self.stream)
+                nxt = self.stream.current
                 return nodes.Getattr(
                     node,
                     attr_token.value,
                     "load",
                     lineno=token.lineno,
                     linepos=token.linepos,
-                    lineno_end=attr_token.lineno,
-                    linepos_end=attr_token.linepos,
+                    lineno_end=nxt.lineno,
+                    linepos_end=nxt.linepos,
                 )
             if attr_token.type != "integer":
                 if not self.environment.parser_tolerate_faults:
@@ -1295,12 +1296,13 @@ class Parser:
                 )
             else:
                 next(self.stream)
+                nxt = self.stream.current
                 arg = nodes.Const(
                     attr_token.value,
                     lineno=attr_token.lineno,
                     linepos=attr_token.linepos,
-                    lineno_end=attr_token.lineno,
-                    linepos_end=attr_token.linepos,
+                    lineno_end=nxt.lineno,
+                    linepos_end=nxt.linepos,
                 )
             end_token = self.stream.current
             return nodes.Getitem(

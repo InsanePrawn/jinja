@@ -135,7 +135,7 @@ class Node(metaclass=NodeType):
     environment: t.Optional["Environment"]
 
     # only filled in diagnostic mode
-    issues: list[t.Union["ParserIssue", "ExprIssue"]]
+    issues: list["Node"]
     lineno_end: int | None
     linepos_end: int | None
 
