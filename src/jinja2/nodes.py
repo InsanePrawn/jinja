@@ -189,7 +189,7 @@ class Node(metaclass=NodeType):
         over all fields and yields the values of they are nodes.  If the value
         of a field is a list all the nodes in that list are returned.
         """
-        items: t.Iterable[t.Tuple[str, t.Any]] = self.iter_fields(exclude, only)
+        items: t.Iterable[tuple[str, t.Any]] = self.iter_fields(exclude, only)
         if reverse:
             items = reversed(list(items))
         for _, item in items:

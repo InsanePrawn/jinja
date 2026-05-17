@@ -7,8 +7,8 @@ template code and python code in expressions.
 import re
 import typing as t
 from ast import literal_eval
-from dataclasses import dataclass
 from collections import deque
+from dataclasses import dataclass
 from sys import intern
 
 from ._identifier import pattern as name_re
